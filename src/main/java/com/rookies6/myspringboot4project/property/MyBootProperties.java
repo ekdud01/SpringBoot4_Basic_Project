@@ -12,6 +12,4 @@ public class MyBootProperties {
     private String name;
     private int age;
     private String fullName;
-
-
 }
