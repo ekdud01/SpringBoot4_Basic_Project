@@ -22,12 +22,19 @@ public class StudentService {
     private final StudentDetailRepository studentDetailRepository;
 
     public List<StudentDTO.Response> getAllStudents() {
-        return studentRepository.findAll()
+//        return studentRepository.findAll()
+//                .stream()
+//                //.map(studentEntity -> StudentDTO.Response.fromEntity(studentEntity))
+//                .map(StudentDTO.Response::fromEntity)
+//                .toList();
+//                //.collect(Collectors.toList());
+
+        //findAll() 대신 Fetch Join 을 사용하여 N+1 문제를 해결한다
+        return studentRepository.findAllWithStudentDetail()
                 .stream()
-                //.map(studentEntity -> StudentDTO.Response.fromEntity(studentEntity))
                 .map(StudentDTO.Response::fromEntity)
                 .toList();
-                //.collect(Collectors.toList());
+        //.collect(Collectors.toList());
     }
 
     // PK로 학생 조회 (FETCH JOIN)
