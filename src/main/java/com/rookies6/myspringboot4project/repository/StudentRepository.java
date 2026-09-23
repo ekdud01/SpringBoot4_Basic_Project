@@ -1,6 +1,8 @@
 package com.rookies6.myspringboot4project.repository;
 
 import com.rookies6.myspringboot4project.entity.Student;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -9,20 +11,48 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
+/*
+ * [ 페이징과 Fetch Join ]
+ *
+ *   @ManyToOne, @OneToOne 같은 ToOne 연관관계는 Fetch Join 을 해도 결과 행이 늘어나지 않으므로
+ *   Pageable 과 함께 사용해도 안전하다. 데이터베이스가 LIMIT / OFFSET 으로 페이징한다.
+ *
+ *   반면 @OneToMany 컬렉션을 Fetch Join 하면 행이 늘어나기 때문에
+ *   Pageable 과 함께 쓰면 Hibernate 가 전체를 읽어 메모리에서 페이징한다. ( 위험 )
+ *
+ *   [ countQuery ]
+ *   생략하면 Spring Data 가 원본 쿼리에서 FETCH 를 떼어내 count 쿼리를 자동으로 만든다.
+ *   자동 생성 SQL 이 직접 작성한 것과 같으면 지정하지 않고,
+ *   불필요한 조인/그룹핑이 남는 경우에만 지정한다.
+ *   예 ) WHERE s.department.id 조건 -> 자동 생성 count 쿼리에 departments 조인이 남는다
+ */
 //StudentRepository 인터페이스
 @Repository
 public interface StudentRepository extends JpaRepository<Student, Long> {
-    //전체 목록을 상세정보/학과와 함께 조회한다 ( findAll() 의 N+1 문제를 해결 )
+
+    //--------------------------------------------------------------------
+    // 목록 조회 : 상세정보 + 학과를 함께 가져와 N+1 을 없앤다
+    //--------------------------------------------------------------------
+
     @Query("SELECT s FROM Student s "
             + "LEFT JOIN FETCH s.studentDetail "
             + "LEFT JOIN FETCH s.department")
     List<Student> findAllWithDetails();
 
-    //LEFT JOIN FETCH : 상세정보가 없는 학생도 조회되어야 하므로 외부 조인을 사용한다
+    @Query("SELECT s FROM Student s "
+            + "LEFT JOIN FETCH s.studentDetail "
+            + "LEFT JOIN FETCH s.department")
+    Page<Student> findAllWithDetails(Pageable pageable);
+
+    //--------------------------------------------------------------------
+    // 단건 조회
+    //--------------------------------------------------------------------
+
+    //LEFT JOIN FETCH : API 는 상세정보를 필수로 받지만, DB 에 직접 들어간 데이터 등
+    //                  상세정보가 없는 행이 있어도 학생 조회가 누락되지 않도록 외부 조인을 유지한다
     @Query("SELECT s FROM Student s LEFT JOIN FETCH s.studentDetail WHERE s.id = :id")
     Optional<Student> findByIdWithStudentDetail(@Param("id") Long id);
 
-    //ID 로 상세정보와 학과를 한 번에 조회한다
     @Query("SELECT s FROM Student s "
             + "LEFT JOIN FETCH s.studentDetail "
             + "LEFT JOIN FETCH s.department "
@@ -36,14 +66,59 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
             + "WHERE s.studentNumber = :studentNumber")
     Optional<Student> findByStudentNumber(@Param("studentNumber") String studentNumber);
 
-    //학과별 학생 목록도 상세정보/학과를 함께 조회한다
+    //--------------------------------------------------------------------
+    // 학과별 조회
+    //--------------------------------------------------------------------
+
     @Query("SELECT s FROM Student s "
             + "LEFT JOIN FETCH s.studentDetail "
             + "LEFT JOIN FETCH s.department "
             + "WHERE s.department.id = :departmentId")
     List<Student> findByDepartmentId(@Param("departmentId") Long departmentId);
 
-    //학과별 학생 수 ( 학과 하나를 대상으로 할 때 사용 )
+    //WHERE 에 s.department 가 있어 자동 생성 count 쿼리에 departments 조인이 남으므로 직접 지정한다
+    @Query(value = "SELECT s FROM Student s "
+            + "LEFT JOIN FETCH s.studentDetail "
+            + "LEFT JOIN FETCH s.department "
+            + "WHERE s.department.id = :departmentId",
+            countQuery = "SELECT COUNT(s) FROM Student s WHERE s.department.id = :departmentId")
+    Page<Student> findByDepartmentId(@Param("departmentId") Long departmentId, Pageable pageable);
+
+    //--------------------------------------------------------------------
+    // 검색 ( 페이징 )
+    //--------------------------------------------------------------------
+    //WHERE 조건이 Student 자신의 컬럼만 있어서 countQuery를 생략하였음
+    @Query("SELECT s FROM Student s "
+            + "LEFT JOIN FETCH s.studentDetail "
+            + "LEFT JOIN FETCH s.department "
+            + "WHERE LOWER(s.name) LIKE LOWER(CONCAT('%', :name, '%'))")
+    Page<Student> findByNameContainingIgnoreCase(@Param("name") String name, Pageable pageable);
+
+    @Query("SELECT s FROM Student s "
+            + "LEFT JOIN FETCH s.studentDetail "
+            + "LEFT JOIN FETCH s.department "
+            + "WHERE LOWER(s.studentNumber) LIKE LOWER(CONCAT('%', :studentNumber, '%'))")
+    Page<Student> findByStudentNumberContainingIgnoreCase(@Param("studentNumber") String studentNumber,
+                                                          Pageable pageable);
+
+    //WHERE 조건에 s.department 가 있어 자동 생성 countQuery에 departments 조인이 남으므로 직접 지정한다
+    @Query(value = "SELECT s FROM Student s "
+            + "LEFT JOIN FETCH s.studentDetail "
+            + "LEFT JOIN FETCH s.department "
+            + "WHERE s.department.id = :departmentId "
+            + "AND LOWER(s.name) LIKE LOWER(CONCAT('%', :name, '%'))",
+            countQuery = "SELECT COUNT(s) FROM Student s "
+                    + "WHERE s.department.id = :departmentId "
+                    + "AND LOWER(s.name) LIKE LOWER(CONCAT('%', :name, '%'))")
+    Page<Student> findByDepartmentIdAndNameContainingIgnoreCase(@Param("departmentId") Long departmentId,
+                                                                @Param("name") String name,
+                                                                Pageable pageable);
+
+    //--------------------------------------------------------------------
+    // 집계 / 존재 확인
+    //--------------------------------------------------------------------
+
+    //학과 하나의 학생 수 ( 학과 삭제 전 검사에 사용 )
     @Query("SELECT COUNT(s) FROM Student s WHERE s.department.id = :departmentId")
     Long countByDepartmentId(@Param("departmentId") Long departmentId);
 

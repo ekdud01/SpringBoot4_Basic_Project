@@ -7,6 +7,8 @@ import com.rookies6.myspringboot4project.exception.ErrorCode;
 import com.rookies6.myspringboot4project.repository.DepartmentRepository;
 import com.rookies6.myspringboot4project.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +40,7 @@ public class DepartmentService {
      * 응답에 필요한 것은 id, name, code, studentCount 네 개뿐이므로
      * COUNT 결과만 조회하는 프로젝션을 사용한다.
      */
+
     // 모든 학과 조회 - 학과 정보와 학생 수를 한 번의 쿼리로 함께 가져온다
     public List<DepartmentDTO.SimpleResponse> getAllDepartments() {
         return departmentRepository.findAllSummaries()
@@ -46,6 +49,29 @@ public class DepartmentService {
                 .toList();
     }
 
+    // 페이징 처리된 모든 학과 조회
+    // 페이징 처리된 학과 조회 - 학과마다 COUNT 를 날리지 않고 집계 쿼리 한 번으로 처리한다
+    public Page<DepartmentDTO.SimpleResponse> getAllDepartments(Pageable pageable) {
+        return departmentRepository.findAllSummaries(pageable)
+                .map(DepartmentDTO.SimpleResponse::fromSummary);
+    }
+
+    //--------------------------------------------------------------------
+    // [ 수업 비교용 ] 1:N 컬렉션을 페이징과 함께 조회했을 때 무슨 일이 생기는지 직접 확인하기 위한 메서드.
+    // 실제 화면에서는 위의 getAllDepartments(Pageable) 을 사용한다.
+    //--------------------------------------------------------------------
+
+    //(A) 컬렉션 Fetch Join + 페이징 : 결과는 맞지만 전체를 읽는다 ( HHH90003004 경고 )
+    public Page<DepartmentDTO.Response> getAllDepartmentsWithStudentsPaged(Pageable pageable) {
+        return departmentRepository.findAllWithStudentsPaged(pageable)
+                .map(DepartmentDTO.Response::fromEntity);
+    }
+
+    //(B) FETCH 없는 일반 JOIN + 페이징 : limit 은 붙지만 학과 개수가 틀어진다
+    public Page<DepartmentDTO.Response> getAllDepartmentsJoinPaged(Pageable pageable) {
+        return departmentRepository.findAllJoinPaged(pageable)
+                .map(DepartmentDTO.Response::fromEntity);
+    }
 
     public DepartmentDTO.Response getDepartmentById(Long id) {
         Department department = departmentRepository.findByIdWithStudents(id)

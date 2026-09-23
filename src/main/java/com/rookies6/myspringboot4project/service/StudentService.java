@@ -10,6 +10,8 @@ import com.rookies6.myspringboot4project.repository.DepartmentRepository;
 import com.rookies6.myspringboot4project.repository.StudentDetailRepository;
 import com.rookies6.myspringboot4project.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +26,14 @@ public class StudentService {
     private final StudentDetailRepository studentDetailRepository;
     private final DepartmentRepository departmentRepository;
 
+    // 페이징 처리된 모든 학생 조회
+    public Page<StudentDTO.Response> getAllStudents(Pageable pageable) {
+        //findAll() 대신 Fetch Join 을 사용하여 N+1 문제를 해결한다
+        Page<Student> students = studentRepository.findAllWithDetails(pageable);
+        return students.map(StudentDTO.Response::fromEntity);
+    }
+
+    // 페이징 처리 없는 모든 학생 조회
     public List<StudentDTO.Response> getAllStudents() {
         //findAll() 대신 Fetch Join 을 사용하여 N+1 문제를 해결한다
         return studentRepository.findAllWithDetails()
@@ -46,6 +56,19 @@ public class StudentService {
         return StudentDTO.Response.fromEntity(student);
     }
 
+    // 페이징 처리된 특정 학과의 학생 조회
+    public Page<StudentDTO.Response> getStudentsByDepartmentId(Long departmentId, Pageable pageable) {
+        // Validate department exists
+        if (!departmentRepository.existsById(departmentId)) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
+                    "Department", "id", departmentId);
+        }
+
+        Page<Student> students = studentRepository.findByDepartmentId(departmentId, pageable);
+        return students.map(StudentDTO.Response::fromEntity);
+    }
+
+    // 페이징 처리 없는 특정 학과의 학생 조회
     public List<StudentDTO.Response> getStudentsByDepartmentId(Long departmentId) {
         // Validate department exists
         if (!departmentRepository.existsById(departmentId)) {
@@ -217,5 +240,4 @@ public class StudentService {
         return !newDetail.getPhoneNumber().equals(currentPhone) &&
                 studentDetailRepository.existsByPhoneNumber(newDetail.getPhoneNumber());
     }
-
 }

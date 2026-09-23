@@ -32,6 +32,8 @@ public class StudentDTO {
         @NotNull(message = "Department ID is required")
         private Long departmentId;
 
+        //StudentDetail 의 phoneNumber, email 이 NOT NULL 이므로 상세정보는 반드시 입력해야 한다
+        //@NotNull(message = "Student detail is required")
         @Valid
         private StudentDetailDTO detailRequest;
     }
@@ -71,7 +73,6 @@ public class StudentDTO {
         private StudentDetailResponse detail;
 
         public static Response fromEntity(Student student) {
-            // 학과는 기본 정보만 담는다. 학과별 학생 수는 학과 조회 API 가 제공한다.
             DepartmentDTO.SimpleResponse departmentResponse = student.getDepartment() != null
                     ? DepartmentDTO.SimpleResponse.fromEntity(student.getDepartment())
                     : null;
